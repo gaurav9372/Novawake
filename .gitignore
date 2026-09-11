@@ -1,0 +1,20 @@
+# Build folders
+bin/
+obj/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.zip
+*.ps1
+Output/
+
+# Local documentation that should not be published
+Private Notes/
+
+# Local development and source-asset folders
+.agents/
+Logo/
+Temp/

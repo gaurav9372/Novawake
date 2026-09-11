@@ -1,0 +1,551 @@
+<Window
+    x:Class="Novawake.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:tb="using:H.NotifyIcon"
+    mc:Ignorable="d"
+    Title="NovaWake">
+
+    <Grid Background="Transparent">
+        <!-- System Tray Icon -->
+        <tb:TaskbarIcon
+            x:Name="TrayIcon"
+            IconSource="ms-appx:///Assets/logo.ico"
+            ToolTipText="NovaWake">
+            <tb:TaskbarIcon.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutItem x:Name="MenuRestore" Text="Restore Window"/>
+                    <MenuFlyoutItem x:Name="MenuToggleWake" Text="Enable Keep-Awake"/>
+                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutItem x:Name="MenuExit" Text="Exit"/>
+                </MenuFlyout>
+            </tb:TaskbarIcon.ContextFlyout>
+        </tb:TaskbarIcon>
+
+        <!-- #1: Root Navigation View -->
+        <NavigationView x:Name="RootNavView" PaneDisplayMode="LeftCompact"
+                        IsSettingsVisible="False" IsBackButtonVisible="Collapsed"
+                        IsPaneToggleButtonVisible="False"
+                        SelectionChanged="RootNavView_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="NavTimer" Content="Timer" Tag="Timer">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE768;" FontFamily="Segoe MDL2 Assets"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavSettings" Content="Settings" Tag="Settings">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;" FontFamily="Segoe MDL2 Assets"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavAbout" Content="About" Tag="About">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE946;" FontFamily="Segoe MDL2 Assets"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid Margin="24">
+                <!-- Content Area -->
+                <!-- Timer View -->
+                <Grid x:Name="TimerGrid" RowDefinitions="Auto, *, Auto" Visibility="Visible">
+                    <!-- #9: Entrance transition -->
+                    <Grid.ChildrenTransitions>
+                        <EntranceThemeTransition FromVerticalOffset="24" IsStaggeringEnabled="False"/>
+                    </Grid.ChildrenTransitions>
+
+                    <!-- Header integrated in Timer view -->
+                    <Grid x:Name="MainHeader" Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,16" Visibility="Visible">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <Image Source="ms-appx:///Assets/logo.png" Width="28" Height="28" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="NovaWake" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemAccentColorLight3}" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- #7: Status pill in header -->
+                        <Border x:Name="StatusPill" Grid.Column="1" CornerRadius="99" Visibility="Collapsed"
+                                Background="#1A22C55E" BorderBrush="#4422C55E" BorderThickness="1"
+                                Padding="8,4" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <Ellipse Width="7" Height="7" Fill="#22C55E" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="StatusPillText" Text="Active" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#22C55E" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Active State: Countdown ring (hidden while inactive) -->
+                    <StackPanel x:Name="ActiveStatePanel" Grid.Row="1" Spacing="20"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="Collapsed">
+                        <TextBlock x:Name="StatusText" Text="INACTIVE"
+                                   FontSize="13" FontWeight="SemiBold" Foreground="Gray" HorizontalAlignment="Center"
+                                   CharacterSpacing="150" HorizontalTextAlignment="Center"/>
+                        
+                        <!-- Pulse & Ring Stack -->
+                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <!-- #4: Layered glow behind ProgressRing -->
+                            <Ellipse x:Name="GlowRing" Width="220" Height="220"
+                                     Fill="Transparent"
+                                     Stroke="{ThemeResource SystemAccentColor}" StrokeThickness="18"
+                                     Opacity="0">
+                                <Ellipse.Resources>
+                                    <Storyboard x:Name="GlowPulse" RepeatBehavior="Forever" AutoReverse="True">
+                                        <DoubleAnimation Storyboard.TargetName="GlowRing"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0.0" To="0.35" Duration="0:0:1.4"
+                                                         EnableDependentAnimation="True"/>
+                                    </Storyboard>
+                                </Ellipse.Resources>
+                            </Ellipse>
+
+                            <!-- #6: Background track circular path -->
+                            <Ellipse Width="220" Height="220"
+                                     Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="6"/>
+
+                            <ProgressRing x:Name="WakeProgressRing" Width="220" Height="220"
+                                          MinWidth="220" MinHeight="220"
+                                          Value="0" Maximum="100" IsIndeterminate="False"
+                                          Foreground="{ThemeResource SystemAccentColor}"/>
+                            <TextBlock x:Name="CountdownText" Text="--:--:--"
+                                       FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Inactive State: Duration Picker -->
+                    <!-- #4: Layout transition wrapper to prevent sudden jumps -->
+                    <Grid Grid.Row="1" VerticalAlignment="Stretch">
+                        <Grid.ChildrenTransitions>
+                            <AddDeleteThemeTransition/>
+                            <RepositionThemeTransition/>
+                        </Grid.ChildrenTransitions>
+ 
+                        <StackPanel x:Name="TimerConfigPanel" Spacing="16" Visibility="Visible" VerticalAlignment="Top" HorizontalAlignment="Stretch">
+                            <!-- #5: Upgraded section heading with accent left bar -->
+                            <Grid Margin="0,16,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="3" CornerRadius="2" MinHeight="18"
+                                        Background="{ThemeResource SystemAccentColor}" VerticalAlignment="Stretch"
+                                        Margin="0,1,10,1"/>
+                                <TextBlock Grid.Column="1" Text="CHOOSE DURATION TO KEEP SYSTEM AWAKE"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                           CharacterSpacing="150" VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+ 
+                            <!-- Duration Cards Row 1 (with clock icons) -->
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                <Border Grid.Column="0" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPreset30m" Tag="30" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="30 Mins" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                                <Border Grid.Column="1" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPreset1h" Tag="60" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="1 Hour" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                                <Border Grid.Column="2" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPreset2h" Tag="120" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="2 Hours" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                            </Grid>
+ 
+                            <!-- Duration Cards Row 2 (with clock / sun / work icons) -->
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                <Border Grid.Column="0" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPreset4h" Tag="240" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="4 Hours" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                                <Border Grid.Column="1" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPreset6h" Tag="360" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="6 Hours" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                                <Border Grid.Column="2" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPreset12h" Tag="720" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="12 Hours" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                            </Grid>
+ 
+                            <!-- Duration Cards Row 3 (with infinity / slider icons) -->
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Border Grid.Column="0" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPresetInfinite" Tag="Infinite" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE121;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="Infinite" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                                <Border x:Name="BorderPresetCustom" Grid.Column="1" CornerRadius="8"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                    <Button x:Name="BtnPresetCustom" Tag="Custom" Click="Preset_Click"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Height="90"
+                                            Background="Transparent" BorderThickness="0" Padding="0">
+                                        <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{ThemeResource SystemAccentColor}"/>
+                                            <TextBlock Text="Custom" FontSize="13" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Action Button (hidden by default; shown for Custom or when active) -->
+                    <Button x:Name="BtnStartWake" Grid.Row="2" Content="Start Wake"
+                            Click="BtnStartWake_Click" HorizontalAlignment="Stretch"
+                            Margin="0,12,0,0" Style="{StaticResource AccentButtonStyle}"
+                            Visibility="Collapsed"/>
+                </Grid>
+
+                <!-- Settings View -->
+                <Grid x:Name="SettingsGrid" RowDefinitions="Auto, *" Visibility="Collapsed">
+                    <!-- #15: Staggered transition -->
+                    <Grid.ChildrenTransitions>
+                        <EntranceThemeTransition FromVerticalOffset="24" IsStaggeringEnabled="True"/>
+                    </Grid.ChildrenTransitions>
+
+                    <!-- Settings Header sticky at top -->
+                    <Grid x:Name="SettingsHeader" Grid.Row="0" Margin="0,0,0,16">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Settings" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemAccentColorLight3}"/>
+                            <TextBlock Text="Configure launch triggers and options" FontSize="11" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Settings cards list -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="8" Margin="0,0,12,0">
+                            <!-- #8: AUTOMATION section label -->
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,8,0,4">
+                                <Border Width="3" CornerRadius="2" Height="13" Background="{ThemeResource SystemAccentColor}" VerticalAlignment="Center"/>
+                                <TextBlock Text="AUTOMATION" FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="150" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Setting Card: Shortcut Option -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16">
+                                <StackPanel Spacing="12">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Desktop Shortcut" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock Text="Create/edit a desktop shortcut to launch NovaWake instantly." FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                                            <TextBlock Text="Current Hotkey:" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                                            <TextBlock x:Name="CurrentHotkeyText" Text="Ctrl+Alt+N" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource SystemAccentColor}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <Button x:Name="BtnEditShortcut" Content="Edit" Click="EditShortcut_Click" HorizontalAlignment="Left" MinWidth="80" Style="{StaticResource AccentButtonStyle}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Setting Card: Default Shortcut Launch Timer -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16">
+                                <StackPanel Spacing="12">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Default Shortcut Launch Timer" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock Text="The duration to automatically start when launched via shortcut." FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ComboBox x:Name="DefaultTimerComboBox" HorizontalAlignment="Left" MinWidth="180" SelectionChanged="DefaultTimerComboBox_SelectionChanged">
+                                        <ComboBoxItem Content="30 minutes" Tag="30"/>
+                                        <ComboBoxItem Content="1 hour" Tag="60"/>
+                                        <ComboBoxItem Content="2 hours" Tag="120"/>
+                                        <ComboBoxItem Content="4 hours" Tag="240"/>
+                                        <ComboBoxItem Content="6 hours" Tag="360"/>
+                                        <ComboBoxItem Content="12 hours" Tag="720"/>
+                                        <ComboBoxItem Content="Infinite" Tag="Infinite"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- #8: POWER section label -->
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,8,0,4">
+                                <Border Width="3" CornerRadius="2" Height="13" Background="{ThemeResource SystemAccentColor}" VerticalAlignment="Center"/>
+                                <TextBlock Text="POWER" FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="150" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Setting Card: Launch on Boot -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Top">
+                                        <TextBlock Text="Start on System Boot" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Launch NovaWake minimized to tray when Windows starts." FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="StartupToggle" Grid.Column="1"
+                                                  IsOn="False" Toggled="StartupToggle_Toggled"
+                                                  OnContent="{x:Null}" OffContent="{x:Null}"
+                                                  MinWidth="0" VerticalAlignment="Top"
+                                                  Margin="12,-4,0,0"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Setting Card: Prevent Display Sleep -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Top">
+                                        <TextBlock Text="Prevent Monitor Sleep" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Keep the monitor turned on. If disabled, only the PC remains awake." FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="DisplaySleepToggle" Grid.Column="1"
+                                                  IsOn="True" Toggled="DisplaySleepToggle_Toggled"
+                                                  OnContent="{x:Null}" OffContent="{x:Null}"
+                                                  MinWidth="0" VerticalAlignment="Top"
+                                                  Margin="12,-4,0,0"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- #14: Setting Card: Timer End Alert -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16">
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Top">
+                                        <TextBlock Text="Timer End Alert" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Play a notification tone when a timed wake session ends." FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="SoundAlertToggle" Grid.Column="1"
+                                                  IsOn="True" Toggled="SoundAlertToggle_Toggled"
+                                                  OnContent="{x:Null}" OffContent="{x:Null}"
+                                                  MinWidth="0" VerticalAlignment="Top"
+                                                  Margin="12,-4,0,0"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- #8: APP section label -->
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,8,0,4">
+                                <Border Width="3" CornerRadius="2" Height="13" Background="{ThemeResource SystemAccentColor}" VerticalAlignment="Center"/>
+                                <TextBlock Text="APP" FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="150" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Setting Card: About NovaWake (navigates to About page) -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                <Button x:Name="BtnGoToAbout" Click="BtnGoToAbout_Click"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Background="Transparent" BorderThickness="0" Padding="16,14">
+                                    <Grid ColumnDefinitions="Auto, *" HorizontalAlignment="Left">
+                                        <Image Grid.Column="0" Source="ms-appx:///Assets/logo.png"
+                                               Width="36" Height="36" Stretch="Uniform"
+                                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="About NovaWake" FontWeight="SemiBold"/>
+                                            <TextBlock x:Name="AboutCardVersionText" Text="Version info"
+                                                       FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- About Grid (About Page) -->
+                <Grid x:Name="AboutGrid" RowDefinitions="Auto, *" Visibility="Collapsed">
+                    <!-- #15: Staggered transition -->
+                    <Grid.ChildrenTransitions>
+                        <EntranceThemeTransition FromVerticalOffset="24" IsStaggeringEnabled="True"/>
+                    </Grid.ChildrenTransitions>
+
+                    <!-- About Header sticky at top -->
+                    <Grid x:Name="AboutHeader" Grid.Row="0" Margin="0,0,0,16">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="About" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemAccentColorLight3}"/>
+                            <TextBlock Text="App info and version" FontSize="11" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- About cards list -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="12" Margin="0,0,12,0">
+                            <!-- App Identity Card -->
+                            <Border CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16,14">
+                                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                    <!-- App Icon -->
+                                    <Image Source="ms-appx:///Assets/logo.png" Width="40" Height="40"
+                                           VerticalAlignment="Center" Stretch="Uniform"/>
+                                    <!-- App Name -->
+                                    <TextBlock Text="NovaWake" FontSize="18" FontWeight="Bold"
+                                               VerticalAlignment="Center" Foreground="{ThemeResource SystemAccentColorLight3}"/>
+                                    <!-- Version -->
+                                    <TextBlock x:Name="AboutVersionText" Text="v1.1.0" FontSize="12"
+                                               VerticalAlignment="Center" Margin="4,2,0,0"
+                                               Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Description Card -->
+                            <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="16">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="About" FontWeight="SemiBold"/>
+                                    <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="20"
+                                               Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                               Text="NovaWake is a lightweight system tray utility that prevents your PC from going to sleep. Set a duration, pick a preset, or keep your screen awake indefinitely — all without touching Power Settings."/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Developer Card (custom premium styled chevrons) -->
+                            <Border CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Padding="20">
+                                <StackPanel Spacing="14">
+                                    <!-- Developer identity row -->
+                                    <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                                        <!-- Circular photo -->
+                                        <Border Width="52" Height="52" CornerRadius="26">
+                                            <Border.Background>
+                                                <ImageBrush ImageSource="ms-appx:///Assets/developer.png" Stretch="UniformToFill"/>
+                                            </Border.Background>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="Developed by" FontSize="11"
+                                                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                                            <TextBlock Text="Shreyansh Gaurav" FontSize="15" FontWeight="SemiBold"
+                                                       Foreground="{ThemeResource SystemAccentColorLight3}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Divider -->
+                                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                                    <!-- Flat developer links -->
+                                    <StackPanel Spacing="2">
+                                        <StackPanel.Resources>
+                                            <Style x:Key="DeveloperLinkButtonStyle" TargetType="HyperlinkButton">
+                                                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                <Setter Property="Padding" Value="12,10"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="BorderThickness" Value="0"/>
+                                                <Setter Property="CornerRadius" Value="6"/>
+                                            </Style>
+                                        </StackPanel.Resources>
+
+                                        <!-- GitHub -->
+                                        <HyperlinkButton NavigateUri="https://github.com/gaurav9372/Novawake" Style="{StaticResource DeveloperLinkButtonStyle}">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <FontIcon Grid.Column="0" Glyph="&#xE943;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" Margin="0,0,12,0"/>
+                                                <TextBlock Grid.Column="1" Text="GitHub" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
+                                                <FontIcon Grid.Column="2" Glyph="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </HyperlinkButton>
+
+                                        <!-- Donate -->
+                                        <HyperlinkButton NavigateUri="https://solidbilla.com/donate" Style="{StaticResource DeveloperLinkButtonStyle}">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <FontIcon Grid.Column="0" Glyph="&#xE719;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" Margin="0,0,12,0"/>
+                                                <TextBlock Grid.Column="1" Text="Donate" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
+                                                <FontIcon Grid.Column="2" Glyph="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </HyperlinkButton>
+
+                                        <!-- My Apps -->
+                                        <HyperlinkButton NavigateUri="https://solidbilla.com/foundry/" Style="{StaticResource DeveloperLinkButtonStyle}">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <FontIcon Grid.Column="0" Glyph="&#xE71D;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" Margin="0,0,12,0"/>
+                                                <TextBlock Grid.Column="1" Text="My Apps" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
+                                                <FontIcon Grid.Column="2" Glyph="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </HyperlinkButton>
+
+                                        <!-- Contact -->
+                                        <HyperlinkButton NavigateUri="https://solidbilla.com/contact" Style="{StaticResource DeveloperLinkButtonStyle}">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <FontIcon Grid.Column="0" Glyph="&#xE715;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" Margin="0,0,12,0"/>
+                                                <TextBlock Grid.Column="1" Text="Contact" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
+                                                <FontIcon Grid.Column="2" Glyph="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </HyperlinkButton>
+
+                                        <!-- Website -->
+                                        <HyperlinkButton NavigateUri="https://solidbilla.com" Style="{StaticResource DeveloperLinkButtonStyle}">
+                                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                                <FontIcon Grid.Column="0" Glyph="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" Margin="0,0,12,0"/>
+                                                <TextBlock Grid.Column="1" Text="Website" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
+                                                <FontIcon Grid.Column="2" Glyph="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </HyperlinkButton>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </NavigationView>
+
+        <!-- Dialogs -->
+        <ContentDialog x:Name="EditShortcutDialog" Title="Edit Shortcut"
+                       PrimaryButtonText="Save" CloseButtonText="Cancel"
+                       DefaultButton="Primary"
+                       Style="{StaticResource DefaultContentDialogStyle}">
+            <StackPanel Spacing="12" Margin="0,10,0,0">
+                <TextBlock Text="Press your desired key combination below to configure the launch shortcut. You must include modifier keys (e.g. Ctrl, Alt, or Shift)."
+                           FontSize="12" TextWrapping="Wrap"
+                           Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                <TextBox x:Name="DialogHotkeyTextBox" Header="Shortcut Hotkey (Focus &amp; press keys)"
+                         HorizontalAlignment="Stretch" IsReadOnly="True"/>
+                <TextBlock x:Name="DialogAlertTextBlock" FontSize="12"
+                           TextWrapping="Wrap" Visibility="Collapsed"/>
+            </StackPanel>
+        </ContentDialog>
+    </Grid>
+</Window>

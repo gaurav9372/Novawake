@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NovaWake (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "NovaWake (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
